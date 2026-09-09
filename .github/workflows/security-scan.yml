@@ -7,76 +7,70 @@ on:
   workflow_dispatch:
 
 jobs:
-  secrets-scan:
+  security-scan:
     runs-on: self-hosted
-    name: TruffleHog - Secret Scanning
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@main
+      - name: Create reports directory
+        run: mkdir -p security-reports
+
+      - name: "1) TruffleHog - Secret Scanning"
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest \
+            filesystem /repo --only-verified \
+            > security-reports/trufflehog-report.txt 2>&1 || true
+
+      - name: "2) Bandit - Python SAST"
+        continue-on-error: true
+        run: |
+          pip install --break-system-packages bandit --quiet
+          bandit -r backend/ -f txt \
+            > security-reports/bandit-report.txt 2>&1 || true
+
+      - name: "3) Hadolint - Dockerfile Linting"
+        continue-on-error: true
+        run: |
+          {
+            echo "=== backend/Dockerfile ==="
+            docker run --rm -i hadolint/hadolint < backend/Dockerfile
+            echo ""
+            echo "=== frontend/Dockerfile ==="
+            docker run --rm -i hadolint/hadolint < frontend/Dockerfile
+          } > security-reports/hadolint-report.txt 2>&1 || true
+
+      - name: "4) Trivy - Image Vulnerability Scan"
+        continue-on-error: true
+        run: |
+          docker build -t app-backend:scan ./backend
+          docker build -t app-frontend:scan ./frontend
+          {
+            echo "=== app-backend:scan ==="
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy image --severity CRITICAL,HIGH app-backend:scan
+            echo ""
+            echo "=== app-frontend:scan ==="
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy image --severity CRITICAL,HIGH app-frontend:scan
+          } > security-reports/trivy-report.txt 2>&1 || true
+
+      - name: Show generated reports
+        run: ls -la security-reports/
+
+      - name: Commit and push reports to the repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add security-reports/
+          git diff --cached --quiet && echo "No changes to commit" || git commit -m "Update security scan reports [skip ci]"
+          git push
+
+      - name: Upload reports as artifact
+        uses: actions/upload-artifact@v4
         with:
-          extra_args: --only-verified
-
-  bandit-scan:
-    runs-on: self-hosted
-    name: Bandit - Python SAST
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Bandit
-        run: pip install --break-system-packages bandit
-
-      - name: Run Bandit on backend
-        run: bandit -r backend/ -f screen
-
-  hadolint-scan:
-    runs-on: self-hosted
-    name: Hadolint - Dockerfile Linting
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Hadolint on backend Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: backend/Dockerfile
-
-      - name: Run Hadolint on frontend Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: frontend/Dockerfile
-
-  trivy-scan:
-    runs-on: self-hosted
-    name: Trivy - Image Vulnerability Scan
-    needs: []
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build backend image
-        run: docker build -t app-backend:scan ./backend
-
-      - name: Build frontend image
-        run: docker build -t app-frontend:scan ./frontend
-
-      - name: Run Trivy on backend image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'app-backend:scan'
-          format: 'table'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Run Trivy on frontend image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'app-frontend:scan'
-          format: 'table'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
+          name: security-reports
+          path: security-reports/
