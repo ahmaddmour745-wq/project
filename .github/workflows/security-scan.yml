@@ -1,0 +1,82 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  secrets-scan:
+    runs-on: self-hosted
+    name: TruffleHog - Secret Scanning
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  bandit-scan:
+    runs-on: self-hosted
+    name: Bandit - Python SAST
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Bandit
+        run: pip install --break-system-packages bandit
+
+      - name: Run Bandit on backend
+        run: bandit -r backend/ -f screen
+
+  hadolint-scan:
+    runs-on: self-hosted
+    name: Hadolint - Dockerfile Linting
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Hadolint on backend Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: backend/Dockerfile
+
+      - name: Run Hadolint on frontend Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: frontend/Dockerfile
+
+  trivy-scan:
+    runs-on: self-hosted
+    name: Trivy - Image Vulnerability Scan
+    needs: []
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t app-backend:scan ./backend
+
+      - name: Build frontend image
+        run: docker build -t app-frontend:scan ./frontend
+
+      - name: Run Trivy on backend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'app-backend:scan'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy on frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'app-frontend:scan'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
