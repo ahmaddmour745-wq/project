@@ -7,3 +7,4 @@ vault-agent/*.env
 vault-agent/role-id
 vault-agent/secret-id
 vault-agent/*.env
+vault-agent/db_password.txt
