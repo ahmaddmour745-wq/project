@@ -1,0 +1,7 @@
+
+{{ with secret "secret/data/database" }}
+DB_NAME={{ .Data.data.DB_NAME }}
+DB_USER={{ .Data.data.DB_USER }}
+DB_PASSWORD={{ .Data.data.DB_PASSWORD }}
+DB_HOST={{ .Data.data.DB_HOST }}
+{{ end }}

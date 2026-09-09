@@ -1,0 +1,50 @@
+services:
+  vault-agent:
+    image: hashicorp/vault:1.17
+    container_name: vault-agent
+    entrypoint: ["vault", "agent", "-config=/vault/agent/agent-config.hcl"]
+    volumes:
+      - ./vault-agent:/vault/agent
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: db
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: backend
+    depends_on:
+      - db
+      - vault-agent
+    volumes:
+      - ./vault-agent:/vault/agent:ro
+    entrypoint: ["/app/entrypoint.sh"]
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+secrets:
+  db_password:
+    file: ./vault-agent/db_password.txt
+
+volumes:
+  db_data:

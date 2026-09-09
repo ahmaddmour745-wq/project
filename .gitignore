@@ -17,3 +17,5 @@ vault-agent/db_password.txt
 vault-agent/db_password.txt
 vault-agent/db_password.txt
 vault-agent/db_password.txt
+vault-agent/.vault-token
+vault-agent/secrets.env
