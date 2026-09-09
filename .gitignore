@@ -1,0 +1,3 @@
+vault-agent/role-id
+vault-agent/secret-id
+vault-agent/*.env
