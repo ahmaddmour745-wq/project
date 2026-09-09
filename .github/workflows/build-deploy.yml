@@ -13,6 +13,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Restore Vault Agent secret files
+        run: |
+          mkdir -p vault-agent
+          cp /home/kali/Desktop/project/app/vault-agent/role-id vault-agent/role-id
+          cp /home/kali/Desktop/project/app/vault-agent/secret-id vault-agent/secret-id
+          cp /home/kali/Desktop/project/app/vault-agent/db_password.txt vault-agent/db_password.txt
+
+      - name: Stop previous stack
+        run: docker compose down --remove-orphans || true
+
       - name: Build Docker images
         run: docker compose build
 
